@@ -1,0 +1,270 @@
+---
+title: "Advanced Analytics - Assignment 1"
+author: "Brian D. Christman"
+date: "1/20/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(ggplot2)
+library(multcomp)
+library(MASS)
+library(sjPlot)
+library(sjmisc)
+library(sjlabelled)
+library(car)
+library(margins)
+library(pscl)
+```
+
+# Assignment 1 - Part 1
+
+```{r}
+# Import the Data for Part 1 of this Assignment
+Data_Part1 <- read.csv(file.choose(), header = TRUE)
+```
+
+# Part A
+
+```{r}
+# Draw a histogram of Systolic Blood Pressure (SBP)
+hist(Data_Part1$sbp, main = "SBP Among JHS Participants", xlab = "Systolic Blood Pressure (mmHg)")
+```
+
+# Part B
+
+```{r}
+# Multiple linear regression model for SBP
+Data_Part1$education <- as.factor(Data_Part1$education)
+
+MLR_model1 <- lm(sbp ~ bmi + age + male + black + htnmeds + education + totalcalories + activeindex + currsmoker, data = Data_Part1) 
+
+
+# Table showing  beta estimate, p-value, and 95% CI for all 9 predictors
+tab_model(MLR_model1)
+```
+
+For a one unit increase in bmi, there is an estimated 0.626 increase in systolic blood pressure, when holding all other predictors fixed.
+
+We are 95% confident that the true effect size of a one unit increase in bmi on systolic blood pressure, when holding all other predictors fixed, is between 0.41 and 0.84.
+
+## Part C
+
+```{r}
+
+#Scatterplot with linear fit and lowess smoother
+qplot(bmi, sbp, data = Data_Part1, main = "Unadjusted Scatterplot of BMI vs. SBP", xlab = "BMI", ylab = "SBP (mmHg)") +
+  stat_smooth(method="lm", col="red") +
+  stat_smooth(method="loess", col="green") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+# Adjusted scatterplot with linear fit and lowess smoother
+m = margins(MLR_model1)
+mplot <- cplot(MLR_model1) 
+
+AdjScatterplot1 <- ggplot() + 
+  geom_jitter( data=Data_Part1,aes(bmi,sbp), col="blue", width=.1, height=0.03) +
+  geom_smooth(data=Data_Part1,aes(bmi,sbp), col="red", method="loess", se=F) + 
+  geom_line(data=mplot, aes(xvals,yvals), col="green") 
+
+print(AdjScatterplot1 + ggtitle("Adjusted Scatterplot of BMI vs. SBP"))
+
+
+#Scatterplot with linear fit and lowess smoother , by htn meds
+Data_htn0 <-  Data_Part1[which(Data_Part1$htnmeds=='0'),]
+Data_htn1 <- Data_Part1[which(Data_Part1$htnmeds=='1'),]
+
+MLR_model2 <- lm(sbp ~ bmi + age + male + black + htnmeds + education + totalcalories + activeindex + currsmoker, data = Data_htn0)
+
+MLR_model3 <- lm(sbp ~ bmi + age + male + black + htnmeds + education + totalcalories + activeindex + currsmoker, data = Data_htn1) 
+                  
+mplot1 <- cplot(MLR_model2)
+mplot2 <- cplot(MLR_model3)
+               
+AdjScatterplot2 <- ggplot() + 
+  geom_jitter( data=Data_htn0,aes(bmi,sbp), col="blue", width=.1, height=0.03) +
+  geom_jitter( data=Data_htn1,aes(bmi,sbp), col="brown", width=.1, height=0.03) +
+  geom_line(data=mplot1, aes(xvals,yvals), col="red") +
+  geom_line(data=mplot2, aes(xvals,yvals), col="green") 
+
+print(AdjScatterplot2 + ggtitle("Adjusted Scatterplot of BMI vs. SBP parsed out by HTN meds"))
+
+plot_model(MLR_model1, type = "pred", terms = c("bmi", "htnmeds"))
+```
+
+## Part D
+
+```{r}
+# Muliple linear regression model with interaction between bmi and htnmeds
+
+MLR_model2 <- lm(sbp ~ age + male + black + bmi * htnmeds + education + totalcalories + activeindex + currsmoker, data = Data_Part1) 
+
+# Table showing  beta estimate, p-value, and 95% CI for all 9 predictors
+tab_model(MLR_model2)
+```
+
+The interaction between BMI and blood pressure medications is not statistically supported since the p-value is greater than the 0.05 threshold. 
+
+
+## Part E
+
+According to the model constructed in part D, the relationship between BMI and SBP for those on hypertension meds is 0.48 (0.72 + 1*-0.24). So, for a one-unit increase in BMI for an individual on hypertension meds, there is a corresponding increase in SBP by 0.48, while holding all other variable fixed.
+
+The relationship between BMI and SBP for those not on hypertension meds is just the regression coefficient for BMI. This means that for a one-unit increase in BMI for an individual not on hypertension meds, there is a corresponding increase in SBP by 0.72, while holding all other terms fixed.
+
+## Part F
+
+```{r}
+AIC(MLR_model1)
+AIC(MLR_model2)
+```
+
+The AIC values are very close to one another. However, the model without an interaction term (model 1 created in part B) is slightly better since the AIC value is less than that of the model with an interaction term (model 2 created in part D). 
+
+
+## Part G
+
+$Y = \beta_0 + \beta_1X_1 + \beta_2X_2  + \beta_3X_3  + \beta_4X_4  + \beta_5X_5 + \beta_6X_6 + \beta_7X_7 + \beta_8X_8 + \beta_9X_9$
+
+$SBP = 61.49 + 0.66*Age + 3.14*Male + 6.42*Black + 0.63*BMI + 6.82*HtnMeds + 2.88 * Education[2] - 2.08 * Education[3] + 0.00*TotalCalories - 0.25*ActiveIndex + 1.66*CurrSmoker$
+
+## Part H
+
+```{r}
+newperson <- data.frame(age=53, male=1, black=0, bmi=32, htnmeds=0, education=as.factor(3), totalcalories=2100, activeindex=2.3, currsmoker=1)
+prediction_1 <- predict(MLR_model1,newdat=newperson)
+prediction_1
+```
+The predicted SBP is 120.9371 mmHg.
+
+## Part I
+
+```{r}
+AdjScatterplot3 <- ggplot() + 
+  geom_jitter( data=Data_htn0,aes(bmi,sbp), col="blue", width=.1, height=0.03) +
+  geom_jitter( data=Data_htn1,aes(bmi,sbp), col="red", width=.1, height=0.03) +
+  geom_line(data=mplot1, aes(xvals,yvals), col="black") +
+  geom_line(data=mplot2, aes(xvals,yvals), col="red") + 
+  geom_smooth(data=Data_htn0,aes(bmi,sbp), col="blue", method="loess", se=F) +
+  geom_smooth(data=Data_htn1,aes(bmi,sbp), col="red", method="loess", se=F)
+
+print(AdjScatterplot3 + ggtitle("Adjusted Scatterplot of BMI vs. SBP parsed out by HTN meds"))
+```
+
+
+# Assignment 1 - Part 2
+
+```{r}
+# Import the Data for Part 2 of this Assignment
+Data_Part2 <- read.csv(file.choose(), header = TRUE)
+```
+
+
+## Part A
+```{r}
+# Make a discrete histogram of nsppb
+counts <- table(Data_Part2$nsppb)
+barplot(counts, main="NSPPB Distribution",
+   xlab="NSPPB Mobility Level", ylab="Frequency")
+```
+
+## Part B
+
+```{r}
+# Unadjusted Jittered Scatterplot with linear fit and LOWESS smoother for SPPB
+ggdat <- subset(Data_Part2,!is.na(ls7sum))
+ggplot(ggdat) + 
+  geom_jitter(data=ggdat,aes(ls7sum,sppb5), col="blue", width=.1, height=.2) +
+  geom_smooth(data=ggdat,aes(ls7sum,sppb5), col="red", method="lm") +
+  geom_smooth(data=ggdat,aes(ls7sum,sppb5), col="blue", method="loess")
+
+
+# Unadjusted Jittered Scatterplot with linear fit and LOWESS smoother for NSPPB
+ggdat <- subset(Data_Part2,!is.na(ls7sum))
+ggplot(ggdat) + 
+  geom_jitter(data=ggdat,aes(ls7sum,nsppb), col="blue", width=.1, height=.2) +
+  geom_smooth(data=ggdat,aes(ls7sum,nsppb), col="red", method="lm") +
+  geom_smooth(data=ggdat,aes(ls7sum,nsppb), col="blue", method="loess")
+```
+
+## Part C
+
+```{r}
+
+Data_Part2$education <- as.factor(Data_Part2$education)
+
+poisson_model <- glm(nsppb ~ ls7sum + age + male + black + education + prevhf + prevchd + prevstr, data=Data_Part2,  family="poisson")
+summary(poisson_model)
+```
+For a one unit increase in ls7sum, the difference in the logs of expected counts for nsppb is expected to decrease by 0.057 unit, given the other predictor variables in the model are held constant.
+
+## Part D
+```{r}
+pchisq(poisson_model$deviance, df=poisson_model$df.residual, lower.tail=FALSE)
+```
+
+Since the p-value is so small here for the GOF test (p<0.0001), there is sufficient evidence to believe that the poisson model is not the proper fit for the data. Next, we should check to see if a negative binomial model would be more appropriate. 
+
+## Part E
+
+```{r}
+nb_model <- glm.nb(nsppb ~ ls7sum + age + male + black + education + prevhf + prevchd + prevstr, data=Data_Part2)
+summary(nb_model)
+odTest(nb_model, alpha=.05, digits = max(3, getOption("digits") - 3))
+```
+Given that the value of theta is small and significantly less than infinity (theta = infinity for poisson), there is reason to believe that negative binomial may be the better fit here. This is confirmed by the likelihood ratio test which yielded an extremely small p-value (<0.0001) and provides sufficient evidence to suggest that poisson is not the right modeling technique and we should use negative binomial regression.
+
+## Part F
+$log(\mu_i) = \beta_0 + \beta_1X_{1i} + \beta_2X_{2i}  + \beta_3X_{3i}  + \beta_4X_{4i}  + \beta_5X_{5i} + \beta_6X_{6i} + \beta_7X_{7i} + \beta_8X_{8i} + \beta_9X_{9i}$
+
+$log(\mu_i) = -0.679 - 0.059*ls7sum + 0.045*Age - 0.231 * Male + 0.313 * Black - 0.149 * Education[2] - 0.204 * Education[3] + 0.177 * Prevhf + 0.013 * Prevchd - 0.180 * Prevstr$
+
+
+## Part G
+
+```{r}
+Data_Part2$ls7bmi <- as.factor(Data_Part2$ls7bmi)
+Data_Part2$ls7bp <- as.factor(Data_Part2$ls7bp)
+Data_Part2$ls7chol <- as.factor(Data_Part2$ls7chol)
+Data_Part2$ls7smok <- as.factor(Data_Part2$ls7smok)
+Data_Part2$ls7gluc <- as.factor(Data_Part2$ls7gluc)
+Data_Part2$ls7diet <- as.factor(Data_Part2$ls7diet)
+Data_Part2$ls7pa <- as.factor(Data_Part2$ls7pa)
+
+
+poisson_model2 <- glm(nsppb ~ ls7bmi + ls7chol + ls7bp + ls7smok + ls7gluc + ls7diet + ls7pa + age + male + black + education + prevhf + prevchd + prevstr, data=Data_Part2,  family="poisson")
+
+summary(poisson_model2)
+```
+The difference in the logs of expected counts for nsppb is expected to be 0.181 unit lower for individuals with poor glucose levels compared to individuals with ideal glucose levels, while holding the other variables constant in the model. The difference in the logs of expected counts for nsppb is expected to be 0.208 unit lower for individuals with intermediate glucose levels compared to individuals with ideal glucose levels, while holding the other variables constant in the model.
+
+The difference in the logs of expected counts for nsppb is expected to be 0.014 unit lower for individuals with poor cholesterol levels compared to individuals with ideal cholesterol levels, while holding the other variables constant in the model. The difference in the logs of expected counts for nsppb is expected to be 0.060 unit lower for individuals with intermediate cholesterol levels compared to individuals with ideal cholesterol levels, while holding the other variables constant in the model.
+
+## Part H
+
+```{r}
+newperson2 <- data.frame(age=48, male=0, black=1, ls7bmi=as.factor(1), ls7chol=as.factor(1), ls7bp=as.factor(2), ls7pa=as.factor(0), ls7gluc=as.factor(1), ls7diet=as.factor(0), ls7smok=as.factor(2), education=as.factor(1), prevhf=0, prevchd=0, prevstr=0)
+prediction_1 <- predict(poisson_model2,newdat=newperson2)
+prediction_1
+12-prediction_1
+
+
+value <- sum(1,1,2,0,1,0,2,1)
+
+
+newperson3 <- data.frame(age=48, male=0, black=1, education=as.factor(1), prevhf=0, prevchd=0, prevstr=0, ls7sum=value)
+prediction_2 <- predict(poisson_model,newdat=newperson3)
+prediction_2
+12-prediction_2
+
+```
+Based on the woman's information, she has a predicted late-life nsppb of 1.217 and therefore a predicted late-life sppb of 10.783 according to the Poisson model from part G.
+
+Based on the woman's information, she has a predicted late-life nsppb of 1.315 and therefore a predicted late-life sppb of 10.685 according to the Poisson model from part C. 
+
+
